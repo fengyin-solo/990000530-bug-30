@@ -57,4 +57,18 @@ export const cardApi = {
   move: (id, columnId, position) => api.put(`/cards/${id}/move`, { columnId, position })
 }
 
+// Service supervisor
+// Every record carries status/phase/ready/pid/port/...; clients must treat
+// `status` as canonical (phase mirrors it, ready is derived).
+export const serviceApi = {
+  list: () => api.get('/services'),
+  get: (id) => api.get(`/services/${id}`),
+  start: (id) => api.post(`/services/${id}/start`),
+  stop: (id) => api.post(`/services/${id}/stop`),
+  restart: (id) => api.post(`/services/${id}/restart`),
+  cleanup: (id) => api.post(`/services/${id}/cleanup`),
+  stopAll: () => api.post('/services/stop-all'),
+  logs: (id, params) => api.get(`/services/${id}/logs`, { params })
+}
+
 export default api

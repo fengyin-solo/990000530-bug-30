@@ -6,6 +6,10 @@
         <span>Task Board</span>
       </div>
       <div class="navbar-right">
+        <router-link to="/services" class="nav-link">
+          <el-icon><Monitor /></el-icon>
+          服务看板
+        </router-link>
         <el-text style="color: #fff; margin-right: 16px;">
           <el-icon><User /></el-icon>
           {{ authStore.user?.username }}
@@ -22,7 +26,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
-import { List, User, SwitchButton } from '@element-plus/icons-vue'
+import { List, User, SwitchButton, Monitor } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -65,5 +69,21 @@ function handleLogout() {
 .navbar-right {
   display: flex;
   align-items: center;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  text-decoration: none;
+  margin-right: 20px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.nav-link:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 </style>

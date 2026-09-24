@@ -6,7 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "seed": "node db/seed.js"
+    "seed": "node db/seed.js",
+    "svc:list": "node supervisor/cli.js list",
+    "svc:start": "node supervisor/cli.js start",
+    "svc:stop": "node supervisor/cli.js stop",
+    "svc:restart": "node supervisor/cli.js restart",
+    "svc:cleanup": "node supervisor/cli.js cleanup",
+    "svc:logs": "node supervisor/cli.js logs",
+    "test": "node --test test/"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

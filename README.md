@@ -102,3 +102,56 @@ The seed script creates a demo user with a sample board "My Project" containing 
 - Drag and drop cards between columns
 - Drag and drop to reorder columns
 - Responsive design with Element Plus UI
+
+## Service Supervisor (服务看板)
+
+A built-in process supervisor keeps every managed backend service in one
+canonical lifecycle state:
+
+```
+stopped ──start──▶ preparing ──port ready──▶ ready
+                       │                        │
+                       └──crash/timeout──▶ failed│
+                       ◀──start (retry)─────────┘
+ready/failed ──stop──▶ stopping ──exit──▶ stopped
+start/stop/cleanup from stopped or failed reset the record cleanly
+```
+
+There is a **single source of truth**: only `status` is stored
+(`backend/data/supervisor/registry.json`). The `phase` field always mirrors
+`status` and `ready` is derived from it (`status === 'ready'`), so the
+service list page, the board badges and the log page can never disagree.
+Every transition goes through one validated funnel (`ServiceManager._commit`)
+which persists atomically and appends the matching lifecycle log line.
+
+Recovery rules when the supervisor starts (e.g. after a crash or reboot):
+
+- `preparing` + port serving → `ready`, otherwise `failed` (init interrupted)
+- `ready` but the process/port is gone → `stopped` (stale ready marker cleared)
+- `failed` but the port has been released → `stopped` (definite, retryable)
+- `stopping` with a live port → `failed`, otherwise `stopped`
+
+### Commands (existing npm scripts are unchanged)
+
+```bash
+cd backend
+npm run svc:list
+npm run svc:start   <service-id>   # e.g. demo-web
+npm run svc:stop    <service-id>
+npm run svc:restart <service-id>
+npm run svc:cleanup <service-id>   # stop + clear logs/old state -> stopped
+npm run svc:logs    <service-id>
+```
+
+The CLI drives the same state machine as the UI through the REST API while
+the backend is running. Custom services can be added via
+`backend/supervisor.config.json` (see `supervisor/config.js` for the shape).
+
+### Service API (compatible field names)
+
+- `GET  /api/services` — list services (`status`, `phase`, `ready`, `pid`, `port`, ...)
+- `GET  /api/services/:id`
+- `POST /api/services/:id/start` · `/stop` · `/restart` · `/cleanup`
+- `GET  /api/services/:id/logs?phase=ready&since=<ISO timestamp>`
+- `POST /api/services/stop-all`
+

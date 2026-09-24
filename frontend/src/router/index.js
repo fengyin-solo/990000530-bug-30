@@ -24,6 +24,18 @@ const routes = [
     name: 'Board',
     component: () => import('../views/Board.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/services',
+    name: 'Services',
+    component: () => import('../views/Services.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/services/:id/logs',
+    name: 'ServiceLogs',
+    component: () => import('../views/ServiceLogs.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
