@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '../api/index.js'
+import { useBoardStore } from './board.js'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -19,6 +20,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(username, password) {
     const res = await authApi.login(username, password)
+    // Start the new session from a clean lifecycle state
+    useBoardStore().resetAll()
     token.value = res.data.token
     user.value = res.data.user
     localStorage.setItem('token', res.data.token)
@@ -28,6 +31,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(username, password) {
     const res = await authApi.register(username, password)
+    // Start the new session from a clean lifecycle state
+    useBoardStore().resetAll()
     token.value = res.data.token
     user.value = res.data.user
     localStorage.setItem('token', res.data.token)
@@ -40,6 +45,8 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    // Clear board state so no stale "ready" data leaks into the next session
+    useBoardStore().resetAll()
   }
 
   return { user, token, isLoggedIn, loadFromStorage, login, register, logout }

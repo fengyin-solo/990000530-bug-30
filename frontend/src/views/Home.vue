@@ -13,6 +13,18 @@
         <p>Loading boards...</p>
       </div>
 
+      <div v-else-if="boardStore.status === 'error'" class="error-state">
+        <el-result
+          icon="error"
+          title="Failed to load boards"
+          :sub-title="boardStore.error || 'The board list could not be loaded.'"
+        >
+          <template #extra>
+            <el-button type="primary" @click="retryFetch">Retry</el-button>
+          </template>
+        </el-result>
+      </div>
+
       <div v-else-if="boardStore.boards.length === 0" class="empty-state">
         <el-empty description="No boards yet. Create your first board!">
           <el-button type="primary" @click="showCreateDialog = true">Create Board</el-button>
@@ -71,6 +83,10 @@ const createRules = {
 onMounted(() => {
   boardStore.fetchBoards()
 })
+
+function retryFetch() {
+  boardStore.fetchBoards()
+}
 
 function openBoard(board) {
   router.push(`/board/${board.id}`)
@@ -148,6 +164,10 @@ async function confirmDeleteBoard(board) {
 
 .loading-state p {
   margin-top: 12px;
+}
+
+.error-state {
+  padding: 40px 0;
 }
 
 .empty-state {

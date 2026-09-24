@@ -17,6 +17,19 @@
       <p>Loading board...</p>
     </div>
 
+    <div v-else-if="boardStore.status === 'error'" class="error-state">
+      <el-result
+        icon="error"
+        title="Failed to load board"
+        :sub-title="boardStore.error || 'The board could not be loaded.'"
+      >
+        <template #extra>
+          <el-button type="primary" @click="retryLoad">Retry</el-button>
+          <el-button @click="$router.push('/')">Back to Boards</el-button>
+        </template>
+      </el-result>
+    </div>
+
     <div v-else class="columns-container">
       <draggable
         v-model="boardStore.columns"
@@ -74,8 +87,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowLeft, Loading } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
@@ -86,7 +99,6 @@ import AddCardForm from '../components/AddCardForm.vue'
 import CardDetail from '../components/CardDetail.vue'
 
 const route = useRoute()
-const router = useRouter()
 const boardStore = useBoardStore()
 
 const showAddColumn = ref(false)
@@ -96,26 +108,23 @@ const addingToColumnId = ref(null)
 const showCardDetail = ref(false)
 const selectedCard = ref(null)
 
-onMounted(async () => {
+function loadBoardPage() {
   const boardId = parseInt(route.params.id)
-  boardStore.currentBoard = { id: boardId, name: 'Loading...' }
-  try {
-    await boardStore.fetchColumns(boardId)
-    await boardStore.fetchAllCards(boardId)
-    // Get board name from boards list or set from URL
-    const boards = boardStore.boards
-    const found = boards.find(b => b.id === boardId)
-    if (found) {
-      boardStore.currentBoard = found
-    } else {
-      // Fetch boards to get the name
-      await boardStore.fetchBoards()
-      const b = boardStore.boards.find(b => b.id === boardId)
-      if (b) boardStore.currentBoard = b
-    }
-  } catch (err) {
-    ElMessage.error('Failed to load board')
-    router.push('/')
+  boardStore.loadBoard(boardId)
+}
+
+function retryLoad() {
+  loadBoardPage()
+}
+
+onMounted(() => {
+  loadBoardPage()
+})
+
+// Switching boards without a remount starts a fresh load lifecycle
+watch(() => route.params.id, (id, prevId) => {
+  if (id && id !== prevId) {
+    loadBoardPage()
   }
 })
 
@@ -275,5 +284,9 @@ async function onColumnDragEnd(evt) {
 
 .loading-state p {
   margin-top: 12px;
+}
+
+.error-state {
+  padding: 40px 0;
 }
 </style>

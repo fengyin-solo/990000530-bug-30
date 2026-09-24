@@ -1,22 +1,61 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { boardApi, columnApi, cardApi } from '../api/index.js'
 
+// Unified lifecycle states shared by every load:
+//   'idle'    -> nothing loaded yet, or cleanup has completed
+//   'loading' -> a load is in flight (preparing)
+//   'ready'   -> last load succeeded
+//   'error'   -> last load failed (see `error` for the message)
 export const useBoardStore = defineStore('board', () => {
   const boards = ref([])
   const currentBoard = ref(null)
   const columns = ref([])
   const cards = ref({}) // keyed by columnId -> [cards]
-  const loading = ref(false)
+
+  const status = ref('idle')
+  const error = ref(null)
+
+  // Kept for compatibility: views read `loading` to show spinners.
+  const loading = computed(() => status.value === 'loading')
+
+  // Generation token for the current lifecycle. Every new load and every
+  // cleanup bumps it, so async completions from an interrupted or stale
+  // lifecycle are dropped instead of resurrecting old state.
+  let loadToken = 0
+
+  function beginLoad() {
+    loadToken += 1
+    status.value = 'loading'
+    error.value = null
+    return loadToken
+  }
+
+  function isCurrent(token) {
+    return token === loadToken
+  }
+
+  function settleLoad(token, err) {
+    if (!isCurrent(token)) return
+    if (err) {
+      status.value = 'error'
+      error.value = err?.response?.data?.error || err?.message || 'Request failed'
+    } else {
+      status.value = 'ready'
+      error.value = null
+    }
+  }
 
   // Board actions
   async function fetchBoards() {
-    loading.value = true
+    const token = beginLoad()
     try {
       const res = await boardApi.list()
+      if (!isCurrent(token)) return
       boards.value = res.data
-    } finally {
-      loading.value = false
+      settleLoad(token, null)
+    } catch (err) {
+      settleLoad(token, err)
     }
   }
 
@@ -31,19 +70,55 @@ export const useBoardStore = defineStore('board', () => {
     boards.value = boards.value.filter(b => b.id !== id)
   }
 
+  // Load a board page (columns + cards + board meta) as one lifecycle phase,
+  // so the view never renders a half-loaded "ready" state.
+  async function loadBoard(boardId) {
+    const token = beginLoad()
+    try {
+      const colRes = await columnApi.list(boardId)
+      if (!isCurrent(token)) return
+      columns.value = colRes.data
+      cards.value = {}
+      for (const col of colRes.data) {
+        cards.value[col.id] = []
+      }
+
+      const results = await Promise.all(colRes.data.map(col => cardApi.list(col.id)))
+      if (!isCurrent(token)) return
+      colRes.data.forEach((col, i) => {
+        cards.value[col.id] = results[i].data
+      })
+
+      // Resolve board meta from the cached list, refetching it if needed
+      let board = boards.value.find(b => b.id === boardId)
+      if (!board) {
+        const listRes = await boardApi.list()
+        if (!isCurrent(token)) return
+        boards.value = listRes.data
+        board = boards.value.find(b => b.id === boardId)
+      }
+      currentBoard.value = board || { id: boardId, name: `Board #${boardId}` }
+      settleLoad(token, null)
+    } catch (err) {
+      settleLoad(token, err)
+    }
+  }
+
   // Column actions
   async function fetchColumns(boardId) {
-    loading.value = true
+    const token = beginLoad()
     try {
       const res = await columnApi.list(boardId)
+      if (!isCurrent(token)) return
       columns.value = res.data
       // Initialize cards map
       cards.value = {}
       for (const col of res.data) {
         cards.value[col.id] = []
       }
-    } finally {
-      loading.value = false
+      settleLoad(token, null)
+    } catch (err) {
+      settleLoad(token, err)
     }
   }
 
@@ -78,16 +153,21 @@ export const useBoardStore = defineStore('board', () => {
 
   // Card actions
   async function fetchCards(columnId) {
+    const token = loadToken
     const res = await cardApi.list(columnId)
-    cards.value[columnId] = res.data
+    if (isCurrent(token)) {
+      cards.value[columnId] = res.data
+    }
     return res.data
   }
 
   async function fetchAllCards(boardId) {
     // Fetch cards for all columns in parallel
+    const token = loadToken
     const cols = columns.value
     const promises = cols.map(col => cardApi.list(col.id))
     const results = await Promise.all(promises)
+    if (!isCurrent(token)) return
     cols.forEach((col, i) => {
       cards.value[col.id] = results[i].data
     })
@@ -141,17 +221,29 @@ export const useBoardStore = defineStore('board', () => {
     return res.data
   }
 
+  // Leaving a board: drop the detail state, invalidate any in-flight load,
+  // and settle back to a definite 'idle' state.
   function clearBoard() {
+    loadToken += 1
     currentBoard.value = null
     columns.value = []
     cards.value = {}
+    status.value = 'idle'
+    error.value = null
+  }
+
+  // Full reset (logout / new session): nothing from the previous
+  // lifecycle may leak into the next one.
+  function resetAll() {
+    clearBoard()
+    boards.value = []
   }
 
   return {
-    boards, currentBoard, columns, cards, loading,
-    fetchBoards, createBoard, deleteBoard,
+    boards, currentBoard, columns, cards, status, error, loading,
+    fetchBoards, createBoard, deleteBoard, loadBoard,
     fetchColumns, addColumn, renameColumn, deleteColumn, reorderColumn,
     fetchCards, fetchAllCards, addCard, updateCard, deleteCard, moveCard,
-    clearBoard
+    clearBoard, resetAll
   }
 })
